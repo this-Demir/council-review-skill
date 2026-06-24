@@ -32,7 +32,8 @@ council-review/
 │   ├── run_tests.sh           # auto-detects & runs the test suite
 │   ├── save_review.sh         # persists a review to .council-reviews/
 │   └── post_to_github.sh      # posts the verdict to a PR
-└── assets/                    # banner & images
+└── tests/
+    └── run.sh                 # integration tests for the helper scripts
 ```
 
 Start with `SKILL.md` to understand the flow, then `CLAUDE.md` for the design constraints.
@@ -72,16 +73,28 @@ All scripts target **bash 3.2+** (macOS's default) and must stay portable:
 
 ### Testing a script change
 
+The repo ships an integration suite that builds throwaway fixtures and asserts each
+script's output contract (the `=== SECTION ===` headers and status lines the council
+relies on). Run it first — it needs only bash, no test framework:
+
 ```bash
-# 1. Syntax check everything
+bash tests/run.sh       # all scripts; add -v to dump output on failure
+```
+
+It must end with `FAILED: 0`. The suite deliberately exercises the **fallback** paths
+(grep secret scan, `NOT_AUDITED` deps) since those are what a fresh install hits. If you
+add a script or a new branch, add an assertion in `tests/run.sh` for both sides of it.
+
+For a quick manual spot-check while iterating:
+
+```bash
+# Syntax check everything
 for f in scripts/*.sh; do bash -n "$f" && echo "OK: $f"; done
 
-# 2. Run against a throwaway fixture (both the tool-present and tool-missing paths)
+# Run one script against a fixture (both the tool-present and tool-missing paths)
 mkdir /tmp/fix && cd /tmp/fix && git init -q
 printf 'const k="AKIAIOSFODNN7EXAMPLE"\n' > app.js
-printf '{"name":"f","scripts":{"test":"exit 0"}}\n' > package.json
 bash ~/.claude/skills/council-review/scripts/scan_secrets.sh
-bash ~/.claude/skills/council-review/scripts/run_tests.sh
 ```
 
 Please verify **both** branches of any fallback you touch: the path where the tool exists
@@ -99,7 +112,7 @@ A reviewer is defined in three places — keep them consistent:
    do *not* say, a checklist, example lines, and when to cross-reference.
 3. **`references/severity-guide.md`** — only if the reviewer assigns severities.
 
-The test for a good persona: **cover the emoji and a reader should still know who's speaking.**
+The test for a good persona: **cover the name and a reader should still know who's speaking.**
 Voices must not blur together. Give concrete example lines with real values — never generic
 advice like "add more tests".
 
