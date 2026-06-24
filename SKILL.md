@@ -1,5 +1,6 @@
 ---
 name: council-review
+version: 0.1.0
 description: >
   An AI council of specialized senior reviewers that analyzes code from multiple expert
   perspectives simultaneously. Each council member has a distinct voice and mandate.

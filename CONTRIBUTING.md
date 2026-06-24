@@ -127,6 +127,34 @@ advice like "add more tests".
 
 ---
 
+## Versioning & releases
+
+The skill follows [Semantic Versioning](https://semver.org/) (`MAJOR.MINOR.PATCH`).
+Because a skill has no API, the "contract" is its **invocation interface** and its
+**review output structure** (the per-reviewer sections plus the "Council Verdict"):
+
+- **MAJOR** — breaks that contract: removing or renaming a council member, changing
+  the `/council-review` argument syntax, restructuring the output format that users or
+  automation rely on, or renaming a script a persona depends on.
+- **MINOR** — backward-compatible additions: a new reviewer, a new invocation pattern,
+  a new script, or a grounding rule that only *adds* checks.
+- **PATCH** — fixes and tuning with no contract change: script bug fixes, persona voice
+  tuning, fallback-path fixes, documentation.
+
+The version of record is the `version:` field in **`SKILL.md`** frontmatter. The git tag
+(`vX.Y.Z`), the GitHub Release, and the `.skill` artifact name all mirror it.
+
+We stay in `0.x` until the skill has been validated against real external repos (Node and
+Python) with `gitleaks` and `shellcheck` installed — i.e. once the primary tool paths,
+not just the fallbacks, are proven. `1.0.0` is cut at that point.
+
+**Release ritual:** bump `version:` in `SKILL.md` → commit as `chore(release): vX.Y.Z` →
+`git tag vX.Y.Z` → rebuild the `.skill` archive with Python's `zipfile` (never
+PowerShell `Compress-Archive`, which writes backslash paths that break on macOS/Linux) →
+publish a GitHub Release from the tag.
+
+---
+
 ## Code of conduct
 
 Be respectful and constructive. We're building a tool that gives feedback for a living —
