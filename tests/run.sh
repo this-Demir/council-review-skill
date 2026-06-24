@@ -154,6 +154,19 @@ assert_contains "MODE: path"                     "records path mode"
 assert_contains "=== PATH CONTENTS ==="          "prints the path section"
 assert_contains "function add"                   "includes the file body"
 
+start "gather_context: --path on a directory lists AND dumps shell files (regression)"
+# Regression for the .sh-blindness bug: directory mode used to filter out shell
+# scripts (and emit names only), so reviewing a shell dir returned "(none)" with no
+# citable lines. It must now both list the files and dump their contents.
+d="$(fixture ctx_shdir)"
+printf '#!/usr/bin/env bash\necho COUNCIL_MARKER_SH\n' > "$d/tool.sh"
+printf 'def f():\n    return "COUNCIL_MARKER_PY"\n' > "$d/helper.py"
+run_script bash "$SCRIPTS/gather_context.sh" --path "$d"
+assert_not_contains "(none)"                     "directory mode is no longer blind to shell files"
+assert_contains "tool.sh"                        "lists the .sh file"
+assert_contains "COUNCIL_MARKER_SH"              "dumps .sh contents (so file:line is citable)"
+assert_contains "COUNCIL_MARKER_PY"              "dumps other-language contents too"
+
 start "gather_context: codebase mode in a git repo reports git state"
 d="$(fixture ctx_repo)"
 ( cd "$d" && $GIT init -q && printf 'hi\n' > a.txt && $GIT add a.txt && $GIT commit -qm "init" )

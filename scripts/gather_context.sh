@@ -184,11 +184,47 @@ files changed:
     if [ -z "$TARGET_PATH" ]; then
       echo "ERROR: --path requires a path"
     elif [ -d "$TARGET_PATH" ]; then
-      echo "--- files under $TARGET_PATH ---"
-      print_capped 60 find "$TARGET_PATH" -type f \
-        \( -name '*.ts' -o -name '*.tsx' -o -name '*.js' -o -name '*.jsx' \
+      # Reviewable source extensions — keep this list in sync with the languages the
+      # council reviews. Shell IS included: the skill's own scripts are bash, and a
+      # shell/IaC directory must not come back empty.
+      DIR_FILES="$(find "$TARGET_PATH" -type f \
+        \( -name '*.sh' -o -name '*.bash' \
+           -o -name '*.ts' -o -name '*.tsx' -o -name '*.js' -o -name '*.jsx' -o -name '*.mjs' -o -name '*.cjs' \
            -o -name '*.py' -o -name '*.go' -o -name '*.rs' -o -name '*.rb' \
-           -o -name '*.java' -o -name '*.php' -o -name '*.c' -o -name '*.cpp' \)
+           -o -name '*.java' -o -name '*.kt' -o -name '*.kts' -o -name '*.scala' -o -name '*.swift' -o -name '*.cs' \
+           -o -name '*.php' -o -name '*.c' -o -name '*.h' -o -name '*.cpp' -o -name '*.hpp' -o -name '*.cc' \
+           -o -name '*.m' -o -name '*.mm' -o -name '*.lua' -o -name '*.pl' -o -name '*.pm' -o -name '*.r' \
+           -o -name '*.ex' -o -name '*.exs' -o -name '*.clj' -o -name '*.vue' -o -name '*.svelte' -o -name '*.sql' \) \
+        -not -path '*/node_modules/*' -not -path '*/.git/*' -not -path '*/vendor/*' \
+        -not -path '*/dist/*' -not -path '*/build/*' 2>/dev/null | sort)"
+
+      if [ -z "$DIR_FILES" ]; then
+        echo "(no recognized source files under $TARGET_PATH)"
+      else
+        echo "--- files under $TARGET_PATH ---"
+        printf '%s\n' "$DIR_FILES" | head -n 60
+        FCOUNT="$(printf '%s\n' "$DIR_FILES" | wc -l | tr -d ' ')"
+        [ "$FCOUNT" -gt 60 ] && echo "... ($FCOUNT files total, showing first 60)"
+
+        # Dump bounded contents so the council can cite real file:line, not just names.
+        # (Directory mode used to list names only, which made line-grounding impossible.)
+        DIR_FILE_CAP=12; DIR_LINE_CAP=200
+        echo
+        echo "--- file contents (first $DIR_FILE_CAP files, up to $DIR_LINE_CAP lines each) ---"
+        n=0
+        printf '%s\n' "$DIR_FILES" | while IFS= read -r f; do
+          [ -z "$f" ] && continue
+          n=$((n + 1))
+          if [ "$n" -gt "$DIR_FILE_CAP" ]; then
+            echo
+            echo "... (more files not shown — re-run --path on a single file to review them)"
+            break
+          fi
+          echo
+          echo "=== FILE: $f ==="
+          print_capped "$DIR_LINE_CAP" cat "$f"
+        done
+      fi
     elif [ -f "$TARGET_PATH" ]; then
       echo "--- $TARGET_PATH ---"
       print_capped 600 cat "$TARGET_PATH"
