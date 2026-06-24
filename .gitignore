@@ -1,0 +1,41 @@
+# Council reviews may contain sensitive code — never commit them by default.
+.council-reviews/
+
+# Built skill package
+*.skill
+
+# OS / editor cruft
+.DS_Store
+Thumbs.db
+*.swp
+*~
+.idea/
+.vscode/
+
+# Node
+node_modules/
+npm-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+
+# Go
+*.test
+*.out
+
+# Rust
+target/
+
+# Ruby
+.bundle/
+vendor/bundle/
+
+# Logs / temp
+*.log
+tmp/
