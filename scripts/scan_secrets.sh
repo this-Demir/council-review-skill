@@ -73,33 +73,60 @@ echo "      Install gitleaks for deeper, lower-false-positive scanning."
 
 EXCLUDES="--exclude-dir=.git --exclude-dir=node_modules --exclude-dir=vendor --exclude-dir=dist --exclude-dir=build --exclude-dir=.venv --exclude-dir=venv"
 
-# Running total of candidate lines. A function (not a |-delimited string) is used
-# deliberately: several patterns contain `|` alternation, which would be mangled by
-# any pipe-delimited parsing.
+# Patterns are kept as parallel arrays (not a |-delimited string) deliberately:
+# several regexes contain `|` alternation, which any pipe-delimited parsing would
+# mangle. Order matters — classification takes the FIRST matching pattern, so the
+# higher-severity HIGH patterns precede the MEDIUM ones.
+SEVS=(HIGH HIGH HIGH HIGH HIGH MEDIUM MEDIUM)
+LABELS=(
+  "AWS access key id"
+  "Private key (PEM)"
+  "Slack token"
+  "GitHub token"
+  "Google API key"
+  "JWT"
+  "Generic secret assignment"
+)
+PATS=(
+  'AKIA[0-9A-Z]{16}'
+  '-----BEGIN ([A-Z ]+ )?PRIVATE KEY-----'
+  'xox[baprs]-[0-9A-Za-z-]{10,}'
+  'gh[pousr]_[0-9A-Za-z]{36,}'
+  'AIza[0-9A-Za-z_-]{35}'
+  'eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}'
+  '(secret|password|passwd|api[_-]?key|token|access[_-]?key)["'"'"' ]*[:=]["'"'"' ]*[A-Za-z0-9/+_=-]{12,}'
+)
+
+# Walk the tree ONCE with every pattern as a separate -e, instead of one full
+# recursive grep per pattern. The expensive part is the filesystem traversal;
+# classifying which pattern each hit matched is cheap and happens in-memory below.
+# -I skip binary, -E extended regex, -n line numbers, -r recursive.
+GREP_ARGS=()
+for p in "${PATS[@]}"; do GREP_ARGS+=(-e "$p"); done
+matches="$(grep -rIEn $EXCLUDES "${GREP_ARGS[@]}" "$TARGET" 2>/dev/null | head -n 50)"
+
 HITS=0
-scan() { # severity  label  regex...
-  sev="$1"; label="$2"; pat="$3"
-  # -I skip binary, -E extended regex, -n line numbers, -r recursive
-  matches="$(grep -rIEn $EXCLUDES -e "$pat" "$TARGET" 2>/dev/null | head -n 25)"
-  [ -z "$matches" ] && return
+if [ -n "$matches" ]; then
   while IFS= read -r line; do
+    [ -z "$line" ] && continue
     file="${line%%:*}"
     rest="${line#*:}"
     lineno="${rest%%:*}"
-    echo "FINDING [$sev] $file:$lineno — possible $label"
-    HITS=$((HITS + 1))
+    content="${rest#*:}"
+    # Attribute the line to the first (highest-severity) pattern it matches.
+    i=0; n=${#PATS[@]}
+    while [ "$i" -lt "$n" ]; do
+      if printf '%s' "$content" | grep -Eq -e "${PATS[$i]}"; then
+        echo "FINDING [${SEVS[$i]}] $file:$lineno — possible ${LABELS[$i]}"
+        HITS=$((HITS + 1))
+        break
+      fi
+      i=$((i + 1))
+    done
   done <<EOF
 $matches
 EOF
-}
-
-scan HIGH   "AWS access key id"          'AKIA[0-9A-Z]{16}'
-scan HIGH   "Private key (PEM)"          '-----BEGIN ([A-Z ]+ )?PRIVATE KEY-----'
-scan HIGH   "Slack token"               'xox[baprs]-[0-9A-Za-z-]{10,}'
-scan HIGH   "GitHub token"              'gh[pousr]_[0-9A-Za-z]{36,}'
-scan HIGH   "Google API key"           'AIza[0-9A-Za-z_-]{35}'
-scan MEDIUM "JWT"                       'eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}'
-scan MEDIUM "Generic secret assignment" '(secret|password|passwd|api[_-]?key|token|access[_-]?key)["'"'"' ]*[:=]["'"'"' ]*[A-Za-z0-9/+_=-]{12,}'
+fi
 
 if [ "$HITS" -eq 0 ]; then
   echo "RESULT: no secrets matched by basic grep (low confidence — patterns are limited)"
