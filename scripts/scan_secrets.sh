@@ -25,9 +25,11 @@ echo "TARGET: $TARGET"
 if have gitleaks; then
   echo "SCANNER: gitleaks"
   tmp="$(mktemp 2>/dev/null || echo "${TMPDIR:-/tmp}/gitleaks.$$.json")"
-  # `detect` needs a git repo; `dir` scans the filesystem. Pick based on repo state.
+  # Use the modern subcommands (gitleaks 8.19+): `git` scans a repo's history, `dir`
+  # scans the filesystem. The legacy `detect --source` is deprecated. Pick based on
+  # repo state.
   if git -C "$TARGET" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
-    gitleaks detect --source "$TARGET" --no-banner --redact \
+    gitleaks git "$TARGET" --no-banner --redact \
       --report-format json --report-path "$tmp" >/dev/null 2>&1
   else
     gitleaks dir "$TARGET" --no-banner --redact \
@@ -103,6 +105,8 @@ PATS=(
 # -I skip binary, -E extended regex, -n line numbers, -r recursive.
 GREP_ARGS=()
 for p in "${PATS[@]}"; do GREP_ARGS+=(-e "$p"); done
+# $EXCLUDES is intentionally unquoted so it word-splits into separate --exclude-dir flags.
+# shellcheck disable=SC2086
 matches="$(grep -rIEn $EXCLUDES "${GREP_ARGS[@]}" "$TARGET" 2>/dev/null | head -n 50)"
 
 HITS=0

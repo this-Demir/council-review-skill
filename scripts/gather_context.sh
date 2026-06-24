@@ -16,6 +16,16 @@
 
 set -u
 
+# ----------------------------------------------------------------------------- output budgets
+# All line caps live here so the output budget is legible in one place. A diff gets more
+# room than a single file because a diff is the whole point of a PR/issue review, whereas a
+# lone file is usually read in full elsewhere; directory mode dumps a few files shallowly so
+# the council can cite real file:line without drowning in one giant survey.
+MAX_DIFF_LINES=800   # PR / issue / branch diffs
+MAX_FILE_LINES=600   # a single file under --path
+DIR_FILE_CAP=12      # how many files to dump in --path directory mode
+DIR_LINE_CAP=200     # lines per file in that mode
+
 # ----------------------------------------------------------------------------- helpers
 have() { command -v "$1" >/dev/null 2>&1; }
 
@@ -148,14 +158,14 @@ files changed:
 {{range .files}}  {{.path}} (+{{.additions}}/-{{.deletions}})
 {{end}}' 2>/dev/null || echo "(gh pr view failed — PR may not exist or no access)"
       section "DIFF"
-      print_capped 800 gh pr diff "$PR"
+      print_capped "$MAX_DIFF_LINES" gh pr diff "$PR"
     else
       echo "gh CLI not available/authenticated — cannot fetch PR #$PR."
       echo "FALLBACK: install and run 'gh auth login', or re-run in --issue/--path mode."
       if [ "$GIT_OK" = "yes" ]; then
         echo "--- best-effort: diff of current branch vs base ---"
         bb="$(base_branch)"
-        [ -n "$bb" ] && print_capped 800 git diff "$bb"...HEAD
+        [ -n "$bb" ] && print_capped "$MAX_DIFF_LINES" git diff "$bb"...HEAD
       fi
     fi
     ;;
@@ -175,7 +185,7 @@ files changed:
       section "COMMITS ON THIS BRANCH"
       if [ -n "$bb" ]; then print_capped 50 git log "$bb"..HEAD --oneline; else echo "(no base branch found)"; fi
       section "DIFF (branch vs base)"
-      if [ -n "$bb" ]; then print_capped 800 git diff "$bb"...HEAD; else echo "(no base branch to diff against)"; fi
+      if [ -n "$bb" ]; then print_capped "$MAX_DIFF_LINES" git diff "$bb"...HEAD; else echo "(no base branch to diff against)"; fi
     fi
     ;;
 
@@ -208,11 +218,13 @@ files changed:
 
         # Dump bounded contents so the council can cite real file:line, not just names.
         # (Directory mode used to list names only, which made line-grounding impossible.)
-        DIR_FILE_CAP=12; DIR_LINE_CAP=200
+        # Caps (DIR_FILE_CAP / DIR_LINE_CAP) are defined in the output-budgets block up top.
+        # Fed via heredoc, not a pipe, so the loop runs in this shell — matching the pattern
+        # in scan_secrets.sh and keeping the `n` counter honest across iterations.
         echo
         echo "--- file contents (first $DIR_FILE_CAP files, up to $DIR_LINE_CAP lines each) ---"
         n=0
-        printf '%s\n' "$DIR_FILES" | while IFS= read -r f; do
+        while IFS= read -r f; do
           [ -z "$f" ] && continue
           n=$((n + 1))
           if [ "$n" -gt "$DIR_FILE_CAP" ]; then
@@ -223,11 +235,13 @@ files changed:
           echo
           echo "=== FILE: $f ==="
           print_capped "$DIR_LINE_CAP" cat "$f"
-        done
+        done <<EOF
+$DIR_FILES
+EOF
       fi
     elif [ -f "$TARGET_PATH" ]; then
       echo "--- $TARGET_PATH ---"
-      print_capped 600 cat "$TARGET_PATH"
+      print_capped "$MAX_FILE_LINES" cat "$TARGET_PATH"
     else
       echo "ERROR: path not found: $TARGET_PATH"
     fi

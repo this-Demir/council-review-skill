@@ -20,6 +20,11 @@ if [ -z "$PR" ] || [ -z "$FILE" ]; then
   echo "ERROR: usage: post_to_github.sh <pr-number> <review-file>" >&2
   exit 1
 fi
+case "$PR" in
+  *[!0-9]*)
+    echo "ERROR: PR must be a number (got: $PR)" >&2
+    exit 1 ;;
+esac
 if [ ! -f "$FILE" ]; then
   echo "ERROR: review file not found: $FILE" >&2
   exit 1

@@ -255,6 +255,13 @@ printf '## Council Verdict\nShip it.\n' > "$d/review.md"
 run_script bash -c "cd '$d' && bash '$SCRIPTS/post_to_github.sh' 999999 review.md"
 assert_contains "SAVED_FALLBACK:"                 "saves a fallback comment file"
 
+start "post_to_github: non-numeric PR is rejected"
+d="$(fixture post_badpr)"
+printf '## Council Verdict\nShip it.\n' > "$d/review.md"
+run_script bash -c "cd '$d' && bash '$SCRIPTS/post_to_github.sh' not-a-number review.md"
+assert_contains "PR must be a number"             "rejects a non-numeric PR id"
+assert_code 1                                     "exits 1 on bad PR id"
+
 start "post_to_github: review without a Council Verdict => warns and posts full review"
 d="$(fixture post_noverdict)"
 ( cd "$d" && $GIT init -q )
