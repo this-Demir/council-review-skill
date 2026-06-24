@@ -67,6 +67,12 @@ elif [ -f phpunit.xml ] || [ -f phpunit.xml.dist ]; then
   RUNNER="phpunit"; CMD="./vendor/bin/phpunit"
 fi
 
+# Fallback: a project-local bash test harness (e.g. this skill's own tests/run.sh).
+# Only used when no mainstream runner matched, so npm/pytest/etc. still take precedence.
+if [ -z "$RUNNER" ] && [ -f tests/run.sh ]; then
+  RUNNER="shell"; CMD="bash tests/run.sh"
+fi
+
 if [ -z "$RUNNER" ]; then
   echo "STATUS: NOT_RUN"
   echo "REASON: no recognized test runner / test files detected"
@@ -96,14 +102,16 @@ run_with_timeout $CMD >"$OUT_FILE" 2>&1
 EXIT=$?
 
 echo "EXIT_CODE: $EXIT"
+STATUS="FAILED"; REASON=""
 if [ "$EXIT" -eq 124 ] && [ -n "$TIMEOUT_BIN" ]; then
-  echo "STATUS: NOT_RUN"
-  echo "REASON: timed out after ${TIMEOUT}s (suite did not finish)"
+  STATUS="NOT_RUN"; REASON="timed out after ${TIMEOUT}s (suite did not finish)"
+elif [ "$EXIT" -eq 5 ] && [ "$RUNNER" = "pytest" ]; then
+  STATUS="NOT_RUN"; REASON="pytest collected no tests (exit 5) — nothing to run"
 elif [ "$EXIT" -eq 0 ]; then
-  echo "STATUS: PASSED"
-else
-  echo "STATUS: FAILED"
+  STATUS="PASSED"
 fi
+echo "STATUS: $STATUS"
+[ -n "$REASON" ] && echo "REASON: $REASON"
 
 # ----------------------------------------------------------------------------- summary line (best effort)
 summary="$(grep -iE 'tests?:|passing|failing|passed|failed|[0-9]+ (passed|failed|error)|ok |FAIL' "$OUT_FILE" 2>/dev/null | tail -n 5)"
@@ -113,7 +121,7 @@ if [ -n "$summary" ]; then
 fi
 
 # ----------------------------------------------------------------------------- failure excerpt
-if [ "$EXIT" -ne 0 ]; then
+if [ "$STATUS" = "FAILED" ]; then
   echo "--- failure output (last 40 lines) ---"
   tail -n 40 "$OUT_FILE"
 fi

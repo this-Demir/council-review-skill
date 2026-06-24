@@ -142,6 +142,37 @@ run_script bash "$SCRIPTS/run_tests.sh" "$d"
 assert_contains "STATUS: FAILED"                 "reports FAILED on red suite"
 assert_not_contains "STATUS: PASSED"             "does not also claim PASSED"
 
+start "run_tests: pytest that collects nothing => STATUS NOT_RUN (not FAILED)"
+# pytest exits 5 on "no tests collected". Shim a fake pytest on PATH so this is
+# hermetic and does not depend on pytest actually being installed.
+d="$(fixture tests_pytest_empty)"
+printf '[project]\nname = "x"\n' > "$d/pyproject.toml"
+bin="$d/bin"; mkdir -p "$bin"
+printf '#!/usr/bin/env bash\necho "no tests ran"\nexit 5\n' > "$bin/pytest"
+chmod +x "$bin/pytest"
+run_script bash -c "PATH=\"$bin:\$PATH\" bash '$SCRIPTS/run_tests.sh' '$d'"
+assert_contains "RUNNER: pytest"      "selects pytest runner"
+assert_contains "STATUS: NOT_RUN"     "no-tests-collected is NOT_RUN, not FAILED"
+assert_not_contains "STATUS: FAILED"  "does not misreport empty collection as failure"
+
+start "run_tests: bare tests/run.sh harness is detected and run"
+d="$(fixture tests_shell)"
+mkdir -p "$d/tests"
+printf '#!/usr/bin/env bash\necho "all good"\nexit 0\n' > "$d/tests/run.sh"
+chmod +x "$d/tests/run.sh"
+run_script bash "$SCRIPTS/run_tests.sh" "$d"
+assert_contains "RUNNER: shell"   "detects the project-local bash harness"
+assert_contains "STATUS: PASSED"  "runs it and reports PASSED"
+
+start "run_tests: failing tests/run.sh harness => STATUS FAILED"
+d="$(fixture tests_shell_fail)"
+mkdir -p "$d/tests"
+printf '#!/usr/bin/env bash\necho "nope"\nexit 1\n' > "$d/tests/run.sh"
+chmod +x "$d/tests/run.sh"
+run_script bash "$SCRIPTS/run_tests.sh" "$d"
+assert_contains "RUNNER: shell"   "detects the harness"
+assert_contains "STATUS: FAILED"  "shell runner is not hardcoded to PASSED"
+
 # =============================================================================
 # gather_context.sh
 # =============================================================================
