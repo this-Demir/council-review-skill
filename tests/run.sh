@@ -101,6 +101,15 @@ run_script bash "$SCRIPTS/scan_secrets.sh" "$d"
 assert_contains "no secrets"                     "reports nothing found"
 assert_not_contains "FINDING [HIGH]"             "no false-positive HIGH finding"
 
+start "scan_secrets: empty / too-short values do not trip the generic pattern"
+# The generic-secret regex requires a value of 12+ chars after the = / : . An empty
+# string or a 1-char value must NOT match — this pins the {12,} boundary.
+d="$(fixture secrets_boundary)"
+printf 'password = ""\napi_key: x\nconst note = "ok";\n' > "$d/conf.txt"
+run_script bash "$SCRIPTS/scan_secrets.sh" "$d"
+assert_contains "no secrets"                     "empty and <12-char values yield no finding"
+assert_not_contains "FINDING"                    "no generic-secret false positive on short values"
+
 # =============================================================================
 # check_deps.sh
 # =============================================================================
@@ -223,6 +232,14 @@ run_script bash -c "cd '$d' && printf '' | bash '$SCRIPTS/save_review.sh'"
 assert_contains "ERROR"                           "errors on empty content"
 assert_code 1                                     "exits non-zero on empty content"
 
+start "save_review: a second save the same day/branch does not clobber the first"
+d="$(fixture save_collide)"
+( cd "$d" && $GIT init -q && printf 'x\n' > a.txt && $GIT add a.txt && $GIT commit -qm init )
+run_script bash -c "cd '$d' && printf 'first review\n'  | bash '$SCRIPTS/save_review.sh'"
+run_script bash -c "cd '$d' && printf 'second review\n' | bash '$SCRIPTS/save_review.sh'"
+count="$(ls "$d/.council-reviews/"*.md 2>/dev/null | wc -l | tr -d ' ')"
+if [ "$count" -ge 2 ]; then ok "two distinct review files exist (no clobber)"; else fail "two distinct review files exist (got $count)"; fi
+
 # =============================================================================
 # post_to_github.sh  (no network: temp repo has no remote, so gh comment fails -> fallback)
 # =============================================================================
@@ -237,6 +254,19 @@ d="$(fixture post_fallback)"
 printf '## Council Verdict\nShip it.\n' > "$d/review.md"
 run_script bash -c "cd '$d' && bash '$SCRIPTS/post_to_github.sh' 999999 review.md"
 assert_contains "SAVED_FALLBACK:"                 "saves a fallback comment file"
+
+start "post_to_github: review without a Council Verdict => warns and posts full review"
+d="$(fixture post_noverdict)"
+( cd "$d" && $GIT init -q )
+printf '## Security Sentinel\nLooks fine.\nUNIQUE_BODY_MARKER\n' > "$d/review.md"
+run_script bash -c "cd '$d' && bash '$SCRIPTS/post_to_github.sh' 999999 review.md"
+assert_contains "no '## Council Verdict'"         "warns when the verdict section is missing"
+assert_contains "SAVED_FALLBACK:"                 "still produces a fallback, never silent"
+if [ -f "$d/.council-reviews/verdict-pr999999.md" ] && grep -q "UNIQUE_BODY_MARKER" "$d/.council-reviews/verdict-pr999999.md"; then
+  ok "fallback carries the full review body (no verdict to slice)"
+else
+  fail "fallback carries the full review body"
+fi
 
 # =============================================================================
 # summary
