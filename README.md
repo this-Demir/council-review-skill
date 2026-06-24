@@ -4,6 +4,7 @@
 
 <b>Five senior reviewers analyze your code at once — and talk to each other about it.</b>
 
+<img src="assets/council.svg" width="148" height="148" alt="Council of five" />
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-58a6ff.svg?style=flat-square)](LICENSE)
 [![Claude Code Skill](https://img.shields.io/badge/Claude%20Code-Skill-d97757.svg?style=flat-square)](https://docs.claude.com/en/docs/claude-code)
@@ -33,7 +34,7 @@ And the security claims are **grounded in real tools** — `gitleaks`, `npm audi
 
 ```bash
 # 1. Install into your Claude Code skills directory
-git clone https://github.com/<your-username>/council-review.git ~/.claude/skills/council-review
+git clone https://github.com/this-Demir/council-review-skill.git ~/.claude/skills/council-review
 
 # 2. Make the helper scripts executable
 chmod +x ~/.claude/skills/council-review/scripts/*.sh
